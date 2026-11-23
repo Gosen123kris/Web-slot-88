@@ -1,1 +1,257 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arcade Mini - Kumpulan Game Skor</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: Arial, sans-serif; background: linear-gradient(160deg,#102a43,#243b53); color:#fff; min-height:100vh; padding:16px; display:flex; flex-direction:column; align-items:center; }
+  h1 { margin:8px 0; }
+  .top { width:100%; max-width:440px; display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+  .poin { background:#ffd54a; color:#222; padding:6px 12px; border-radius:20px; font-weight:bold; }
+  .card { background:#1f3b57; border:3px solid #4fc3f7; border-radius:16px; padding:16px; width:100%; max-width:440px; }
+  .menu button { display:block; width:100%; margin:8px 0; padding:14px; font-size:18px; }
+  button { border:none; border-radius:10px; padding:10px 14px; font-size:16px; font-weight:bold; cursor:pointer; background:#4fc3f7; color:#102a43; }
+  button.alt { background:#ff7043; color:#fff; }
+  button.back { background:#90a4ae; margin-bottom:10px; }
+  .hidden { display:none; }
+  #msg { text-align:center; min-height:24px; margin:10px 0; font-weight:bold; }
+  .grid4 { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+  .tile { aspect-ratio:1; background:#4fc3f7; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:30px; user-select:none; cursor:pointer; color:#102a43; font-weight:bold; }
+  .tile.open { background:#fff; }
+  .tile.done { background:#66bb6a; }
+  .tile.empty { background:transparent; cursor:default; }
+  .bigcard { font-size:80px; text-align:center; background:#fff; color:#000; border-radius:14px; padding:20px; margin:10px 0; }
+  .row { display:flex; gap:10px; justify-content:center; }
+  .wheelbox { position:relative; width:260px; height:260px; margin:10px auto; }
+  #wheel { width:260px; height:260px; border-radius:50%; border:6px solid #ffd54a; transition: transform 4s cubic-bezier(.17,.67,.12,1); }
+  .pointer { position:absolute; top:-12px; left:50%; transform:translateX(-50%); font-size:30px; }
+  .foot { font-size:12px; opacity:.7; margin-top:14px; text-align:center; max-width:440px; }
+</style>
+</head>
+<body>
+  <h1>Arcade Mini</h1>
+  <div class="top">
+    <div class="poin">Poin: <span id="poin">0</span></div>
+    <div>Rekor: <span id="rekor">0</span></div>
+  </div>
 
+  <div class="card" id="menu">
+    <div class="menu">
+      <button onclick="buka('memory')">Memory Card</button>
+      <button onclick="buka('kartu')">Tebak Kartu Tinggi / Rendah</button>
+      <button onclick="buka('roda')">Roda Hadiah</button>
+      <button onclick="buka('puzzle')">Puzzle Geser Angka</button>
+      <button class="alt" onclick="bonusHarian()">Ambil poin harian</button>
+      <button class="alt" onclick="resetPoin()">Reset poin</button>
+    </div>
+    <div id="msg"></div>
+  </div>
+
+  <div class="card hidden" id="memory">
+    <button class="back" onclick="menu()">Kembali</button>
+    <div>Langkah: <b id="mLangkah">0</b></div>
+    <div class="grid4" id="mGrid" style="margin-top:10px"></div>
+    <div id="mMsg"></div>
+    <button onclick="mulaiMemory()" style="margin-top:10px">Acak ulang</button>
+  </div>
+
+  <div class="card hidden" id="kartu">
+    <button class="back" onclick="menu()">Kembali</button>
+    <div>Kartu sekarang (1 sampai 13). Tebak kartu berikutnya lebih tinggi atau lebih rendah. Benar +10 poin.</div>
+    <div class="bigcard" id="kNow">?</div>
+    <div class="row">
+      <button onclick="tebakKartu('tinggi')">Lebih tinggi</button>
+      <button class="alt" onclick="tebakKartu('rendah')">Lebih rendah</button>
+    </div>
+    <div>Beruntun: <b id="kStreak">0</b></div>
+    <div id="kMsg"></div>
+  </div>
+
+  <div class="card hidden" id="roda">
+    <button class="back" onclick="menu()">Kembali</button>
+    <div class="wheelbox">
+      <div class="pointer">&#9660;</div>
+      <canvas id="wheel" width="260" height="260"></canvas>
+    </div>
+    <div style="text-align:center"><button onclick="putarRoda()" id="btnRoda">Putar roda (sekali per 10 detik)</button></div>
+    <div id="rMsg" style="text-align:center;margin-top:10px;font-weight:bold"></div>
+  </div>
+
+  <div class="card hidden" id="puzzle">
+    <button class="back" onclick="menu()">Kembali</button>
+    <div>Urutkan angka 1 sampai 8. Langkah: <b id="pLangkah">0</b></div>
+    <div class="grid4" id="pGrid" style="grid-template-columns:repeat(3,1fr);margin-top:10px"></div>
+    <div id="pMsg"></div>
+    <button onclick="mulaiPuzzle()" style="margin-top:10px">Acak ulang</button>
+  </div>
+
+  <div class="foot">Game hiburan. Poin hanya angka di layar, bukan uang. Tidak ada deposit dan tidak ada penarikan.</div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  let poin = Number(localStorage.getItem("arcadePoin")) || 0;
+  let rekor = Number(localStorage.getItem("arcadeRekor")) || 0;
+
+  function simpan() {
+    if (poin > rekor) rekor = poin;
+    localStorage.setItem("arcadePoin", poin);
+    localStorage.setItem("arcadeRekor", rekor);
+    $("poin").textContent = poin;
+    $("rekor").textContent = rekor;
+  }
+  function tambah(n) { poin += n; simpan(); }
+
+  const layar = ["menu","memory","kartu","roda","puzzle"];
+  function tampil(nama) { layar.forEach(l => $(l).classList.toggle("hidden", l !== nama)); }
+  function menu() { tampil("menu"); }
+  function buka(nama) {
+    tampil(nama);
+    if (nama === "memory") mulaiMemory();
+    if (nama === "kartu") mulaiKartu();
+    if (nama === "roda") gambarRoda();
+    if (nama === "puzzle") mulaiPuzzle();
+  }
+
+  function bonusHarian() {
+    const hari = new Date().toDateString();
+    if (localStorage.getItem("arcadeHarian") === hari) { $("msg").textContent = "Poin harian sudah diambil hari ini."; return; }
+    localStorage.setItem("arcadeHarian", hari);
+    tambah(50);
+    $("msg").textContent = "+50 poin harian!";
+  }
+  function resetPoin() { poin = 0; simpan(); $("msg").textContent = "Poin direset."; }
+
+  /* ---------- Memory Card ---------- */
+  let mKartu = [], mBuka = [], mLangkah = 0, mKunci = false;
+  function mulaiMemory() {
+    const isi = ["A","B","C","D","E","F","G","H"];
+    mKartu = [...isi, ...isi].sort(() => Math.random() - .5).map(v => ({v, buka:false, selesai:false}));
+    mBuka = []; mLangkah = 0; mKunci = false;
+    $("mMsg").textContent = "";
+    gambarMemory();
+  }
+  function gambarMemory() {
+    $("mLangkah").textContent = mLangkah;
+    $("mGrid").innerHTML = "";
+    mKartu.forEach((k, i) => {
+      const d = document.createElement("div");
+      d.className = "tile" + (k.selesai ? " done" : k.buka ? " open" : "");
+      d.textContent = (k.buka || k.selesai) ? k.v : "?";
+      d.onclick = () => klikMemory(i);
+      $("mGrid").appendChild(d);
+    });
+  }
+  function klikMemory(i) {
+    const k = mKartu[i];
+    if (mKunci || k.buka || k.selesai) return;
+    k.buka = true; mBuka.push(i); gambarMemory();
+    if (mBuka.length === 2) {
+      mLangkah++; mKunci = true;
+      const [a, b] = mBuka;
+      setTimeout(() => {
+        if (mKartu[a].v === mKartu[b].v) { mKartu[a].selesai = mKartu[b].selesai = true; }
+        mKartu[a].buka = mKartu[b].buka = false;
+        mBuka = []; mKunci = false; gambarMemory();
+        if (mKartu.every(x => x.selesai)) {
+          const skor = Math.max(10, 100 - mLangkah * 3);
+          tambah(skor);
+          $("mMsg").textContent = "Selesai dalam " + mLangkah + " langkah! +" + skor + " poin";
+        }
+      }, 700);
+    }
+  }
+
+  /* ---------- Tebak Kartu ---------- */
+  let kNow = 1, kStreak = 0;
+  const acakKartu = () => Math.floor(Math.random() * 13) + 1;
+  function mulaiKartu() { kNow = acakKartu(); kStreak = 0; $("kNow").textContent = kNow; $("kStreak").textContent = 0; $("kMsg").textContent = ""; }
+  function tebakKartu(arah) {
+    const baru = acakKartu();
+    let benar = (arah === "tinggi" && baru > kNow) || (arah === "rendah" && baru < kNow);
+    if (baru === kNow) { $("kMsg").textContent = "Sama! Coba lagi, tidak dihitung."; }
+    else if (benar) { kStreak++; tambah(10); $("kMsg").textContent = "Benar! Kartu " + baru + ". +10 poin"; }
+    else { kStreak = 0; $("kMsg").textContent = "Salah. Kartu " + baru + ". Beruntun kembali ke 0."; }
+    kNow = baru;
+    $("kNow").textContent = kNow;
+    $("kStreak").textContent = kStreak;
+  }
+
+  /* ---------- Roda Hadiah ---------- */
+  const hadiah = [5, 10, 0, 20, 5, 50, 10, 0];
+  const warna = ["#ef5350","#ffca28","#66bb6a","#42a5f5","#ab47bc","#ff7043","#26c6da","#8d6e63"];
+  let sudut = 0, rodaJalan = false;
+  function gambarRoda() {
+    const c = $("wheel").getContext("2d");
+    const n = hadiah.length, r = 130, a = 2 * Math.PI / n;
+    c.clearRect(0, 0, 260, 260);
+    for (let i = 0; i < n; i++) {
+      c.beginPath(); c.moveTo(r, r);
+      c.arc(r, r, r, i * a - Math.PI / 2, (i + 1) * a - Math.PI / 2);
+      c.fillStyle = warna[i]; c.fill();
+      c.save(); c.translate(r, r); c.rotate(i * a + a / 2);
+      c.fillStyle = "#fff"; c.font = "bold 18px Arial"; c.textAlign = "center";
+      c.fillText(hadiah[i], 0, -r + 36);
+      c.restore();
+    }
+  }
+  function putarRoda() {
+    if (rodaJalan) return;
+    rodaJalan = true; $("btnRoda").disabled = true; $("rMsg").textContent = "";
+    const n = hadiah.length, a = 360 / n;
+    const idx = Math.floor(Math.random() * n);
+    const target = 360 * 5 + (360 - (idx * a + a / 2));
+    sudut = Math.ceil(sudut / 360) * 360 + target;
+    $("wheel").style.transform = "rotate(" + sudut + "deg)";
+    setTimeout(() => {
+      tambah(hadiah[idx]);
+      $("rMsg").textContent = hadiah[idx] > 0 ? "Dapat " + hadiah[idx] + " poin!" : "Zonk, coba lagi!";
+      setTimeout(() => { rodaJalan = false; $("btnRoda").disabled = false; }, 6000);
+    }, 4200);
+  }
+
+  /* ---------- Puzzle Geser Angka (3x3) ---------- */
+  let pBoard = [], pLangkah = 0;
+  function mulaiPuzzle() {
+    pBoard = [1,2,3,4,5,6,7,8,0];
+    for (let i = 0; i < 150; i++) {
+      const z = pBoard.indexOf(0), t = tetangga(z);
+      const s = t[Math.floor(Math.random() * t.length)];
+      [pBoard[z], pBoard[s]] = [pBoard[s], pBoard[z]];
+    }
+    pLangkah = 0; $("pMsg").textContent = ""; gambarPuzzle();
+  }
+  function tetangga(i) {
+    const r = Math.floor(i / 3), c = i % 3, h = [];
+    if (r > 0) h.push(i - 3); if (r < 2) h.push(i + 3);
+    if (c > 0) h.push(i - 1); if (c < 2) h.push(i + 1);
+    return h;
+  }
+  function gambarPuzzle() {
+    $("pLangkah").textContent = pLangkah;
+    $("pGrid").innerHTML = "";
+    pBoard.forEach((v, i) => {
+      const d = document.createElement("div");
+      d.className = "tile" + (v === 0 ? " empty" : "");
+      d.textContent = v === 0 ? "" : v;
+      d.onclick = () => klikPuzzle(i);
+      $("pGrid").appendChild(d);
+    });
+  }
+  function klikPuzzle(i) {
+    const z = pBoard.indexOf(0);
+    if (!tetangga(z).includes(i)) return;
+    [pBoard[z], pBoard[i]] = [pBoard[i], pBoard[z]];
+    pLangkah++; gambarPuzzle();
+    if (pBoard.slice(0, 8).every((v, k) => v === k + 1)) {
+      const skor = Math.max(20, 150 - pLangkah);
+      tambah(skor);
+      $("pMsg").textContent = "Selesai dalam " + pLangkah + " langkah! +" + skor + " poin";
+    }
+  }
+
+  simpan();
+</script>
+</body>
+</html>
